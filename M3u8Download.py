@@ -182,12 +182,25 @@ class M3u8Download:
             if num_retries > 0:
                 self.download_key(key_line, num_retries - 1)
 
+    # 视频合并方法，使用ffmpeg
+    def merge(self,concatfile, name):
+        try:
+            path = 'cache/' + name + '.mp4'
+            # command = 'ffmpeg -y -f concat -i %s -crf 18 -ar 48000 -vcodec libx264 -c:a aac -r 25 -g 25 -keyint_min 25 -strict -2 %s' % (concatfile, path)
+            command = 'ffmpeg -y -f concat -i %s -bsf:a aac_adtstoasc -c copy %s' % (concatfile, path)
+            os.system(command)
+            print('视频合并完成')
+        except:
+            print('合并失败')
+
     def output_mp4(self):
         """
         合并.ts文件，输出mp4格式视频，需要ffmpeg
         """
         cmd = f"ffmpeg -allowed_extensions ALL -i '{self._file_path}.m3u8' -acodec \
         copy -vcodec copy -f mp4 '{self._file_path}.mp4'"
+
+        self.merge(self._file_path,222)
         os.system(cmd)
 
     def delete_file(self):
