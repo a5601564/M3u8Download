@@ -25,7 +25,7 @@ requests = eventlet.import_patched('requests')
 
 
 # 预下载，获取m3u8文件，读出ts链接，并写入文档
-def down(headers, url, base_url):
+def down(headers, url, root_dir):
     m3u8_dirname = os.path.dirname(url)
     m3u8_urlp = urlparse(url)
     # 当ts文件链接不完整时，需拼凑
@@ -40,7 +40,10 @@ def down(headers, url, base_url):
     s = len(lines)
     # 找到文档中含有ts字段的行
     # concatfile = 'cache/' + "s" + '.txt'
-    concatfile = 'cache/' + "decode" + '.m3u8'
+    if not os.path.exists(root_dir):
+        os.makedirs(root_dir)
+
+    concatfile = root_dir + '/' + "decode" + '.m3u8'
     if os.path.exists(concatfile):
         os.remove(concatfile)
     s_count = 1
@@ -61,7 +64,7 @@ def down(headers, url, base_url):
             # filename = re.search('([a-zA-Z0-9-_]+.ts)', line).group(1).strip()
             # filename = os.path.basename (line)
             filename = str(s_count).zfill(10) + '.ts'
-            if not os.path.exists('cache/' + filename):
+            if not os.path.exists(root_dir + '/' + filename):
                 # print ("  Add ", filename)
                 # ts_queue.put(line)
                 ts_queue.put((filename, http_line, 0))
@@ -94,7 +97,7 @@ def down(headers, url, base_url):
                 print(line, key_url, http_key, key_line, "\n")
 
                 key_r = requests.get(http_key, stream=True, headers=headers, timeout=(15, 60), verify=True)
-                with open('cache/key.key', 'wb') as fp:
+                with open(root_dir + '/key.key', 'wb') as fp:
                     for chunk in key_r.iter_content(5242):
                         if chunk:
                             fp.write(chunk)
@@ -105,7 +108,7 @@ def down(headers, url, base_url):
 
 
 # 线程模式，执行线程下载
-def run(ts_queue, headers, pool):
+def run(ts_queue, headers, pool ,root_dir):
     while True:
         try:
             # url, sleepTime = ts_queue.get (True, 0.5)
@@ -122,7 +125,7 @@ def run(ts_queue, headers, pool):
         try:
             r = requests.get(url, stream=True, headers=headers, timeout=(15, 60), verify=False)
             r.raise_for_status()
-            with open('cache/' + filename, 'wb') as fp:
+            with open(root_dir + '/' + filename, 'wb') as fp:
                 for chunk in r.iter_content(5242):
                     if chunk:
                         fp.write(chunk)
@@ -137,8 +140,7 @@ def run(ts_queue, headers, pool):
 # 视频合并方法，使用ffmpeg
 def merge(concatfile, name):
     try:
-        # path = 'cache/' + name + '.mp4'
-        path =  name + '.mp4'
+        path =  'video/' + name + '.mp4'
         # command = 'ffmpeg -y -f concat -i %s -crf 18 -ar 48000 -vcodec libx264 -c:a aac -r 25 -g 25 -keyint_min 25 -strict -2 %s' % (concatfile, path)
         command = "ffmpeg -allowed_extensions ALL -protocol_whitelist \"file,http,crypto,tcp\" "
         # command += ' -y -f concat -i %s -bsf:a aac_adtstoasc -c copy %s' % (concatfile, path)
@@ -150,8 +152,8 @@ def merge(concatfile, name):
         print('合并失败')
 
 
-def remove():
-    dir = 'cache/'
+def remove(root_dir):
+    # dir = 'cache'
     """
     #for line in open('cache/s.txt'):
     for line in open('cache/decode.m3u8'):
@@ -166,7 +168,7 @@ def remove():
     except:
         print('文件删除失败')
     """
-    command = "del " + dir + "*/Q"
+    command = "del " + root_dir + "  /s /q /f "
     os.system(command)
 
 
@@ -194,7 +196,10 @@ if __name__ == '__main__':
 
     start = datetime.datetime.now().replace(microsecond=0)
     print("目录文件开始写入")
-    s, concatfile = down(headers, url, base_url)
+
+    root_dir = ran_str + '_cache'
+
+    s, concatfile = down(headers, url, root_dir)
     print('\n')
     print("目录文件写入结束")
     # 获取队列元素数量
@@ -213,7 +218,7 @@ if __name__ == '__main__':
     # print(s,concatfile)
 
     pool = eventlet.GreenPool(t_num)
-    run_args = {'ts_queue': s, 'headers': headers, 'pool': pool}
+    run_args = {'ts_queue': s, 'headers': headers, 'pool': pool ,"root_dir":root_dir}
     for i in range(t_num):
         pool.spawn_n(run, **run_args)
     pool.waitall()
@@ -234,7 +239,8 @@ if __name__ == '__main__':
     end = datetime.datetime.now().replace(microsecond=0)
     print('写文件及下载耗时：' + str(end - start))
     merge(concatfile, name)
-    remove()
+    root_dir = ran_str + "_cache"
+    remove(root_dir)
     over = datetime.datetime.now().replace(microsecond=0)
     print('合并及删除文件耗时：' + str(over - end))
     print("所有任务结束 ", name)
